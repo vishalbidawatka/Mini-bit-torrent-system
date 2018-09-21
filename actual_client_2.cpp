@@ -14,18 +14,24 @@
 #include <openssl/sha.h>
 #include <cmath>
 #include<fstream>
+#include<algorithm>
 using namespace std;
 vector<string> string_processing(string s);
 int get_file_size(string file_name);
-void generating_sha(string file_name);
+//void generating_sha(string file_name);
 void *task1(void *arguments);
-string generating_sha(string file_name, string mtorrentfile, string t1info , string tip2info ,float &size);
+string generating_sha(string file_name, string mtorrentfile, string t1info , string tip2info ,int &size);
 void get_ip_port(string org, string &ip, int &port);
-void bind_to_soclet(string trackip , string com_from_client , int trackport, string file_name , string myip , int myport, string shastr, float size , string shrget,string fileoutput="default.txt");
+void bind_to_soclet(string trackip , string com_from_client , int trackport, string file_name , string myip , int myport, string shastr, int size , string shrget,string fileoutput="default.txt");
 vector<string> string_processing2(string s);
 vector<string> string_processing3(string s);
 void *clientasserver(void *arguments);
-void connect_to_client_for_downloading_file(string clientinfowithchunk, string);
+void *connect_to_client_for_downloading_file(void *arguments);
+void send_client_the_file(string filename , int size , int cfd, int chunk_num);
+void download_file_from_client(string filenameoutput,int sock);
+struct thread_arg {
+    string clientinfo;
+};
 int main(int argc, char **argv)
 {
     string clientip;
@@ -61,7 +67,7 @@ int main(int argc, char **argv)
         {
             string torrent_file_name = command[2];
             string file_name = command[1];
-            float size;
+            int size;
             string sha = generating_sha(file_name,torrent_file_name,tracker_1_info,tracker_2_info,size);
 
             bind_to_soclet(tracker_ip1,s,portt1, file_name, clientip , clientport, sha , size ,"share");
@@ -104,7 +110,7 @@ int main(int argc, char **argv)
 
     return 0;
 }
-void bind_to_soclet(string trackip , string com_from_client , int trackport, string file_name , string myip , int myport, string shastr, float size , string shorget , string fileoutput)
+void bind_to_soclet(string trackip , string com_from_client , int trackport, string file_name , string myip , int myport, string shastr, int size , string shorget , string fileoutput)
 {   
 
     unsigned char buff[shastr.size()+1] ;
@@ -170,7 +176,7 @@ void bind_to_soclet(string trackip , string com_from_client , int trackport, str
         cout<<n<<endl;
         n = send(sock ,full.c_str() , strlen(full.c_str()) , 0 ); 
         cout<<n<<endl;
-
+        pthread_t threadarr3[32];  
 
         int buflen;
         int n1 = read(sock, (char *)&buflen, sizeof(buflen));
@@ -184,16 +190,27 @@ void bind_to_soclet(string trackip , string com_from_client , int trackport, str
 
         vector<string> allips = string_processing3(buffer);
         int no_of_seeders = allips.size();
-        int noofchunks = ceil(size/512);
-        if (noofchunks = 0)
-        {
-            noofchunks = 1;
-        }
-        // for(int i = 0 ; i<no_of_seeders ; i++)
+        int size_of_chunk = ceil(size/no_of_seeders);
+        // if (noofchunks = 0)
         // {
-        //     connect_to_client_for_downloading_file(allips[i]+"|1");
+        //     noofchunks = 1;
         // }
-        connect_to_client_for_downloading_file(allips[0]+"|"+file_name+"|1", fileoutput);
+        cout<<"number of seeders" <<no_of_seeders<<endl;
+        cout<<"size of each chunk"<<size_of_chunk<<endl;
+        string each_client_info ;
+        struct thread_arg args[no_of_seeders]; 
+        for(int i = 0; i<no_of_seeders;i++)
+        {
+        args[i].clientinfo = allips[i]+"|"+file_name+"|"+to_string(size_of_chunk)+"|"+to_string(i+1)+"|"+"vishal"+"_"+to_string(i+1);
+        //each_client_info = allips[i]+"|"+file_name+"|"+to_string(size_of_chunk)+"|"+to_string(i+1)+"|"+"vishal"+"_"+to_string(i+1);
+        cout<<"each client info"<<args[i].clientinfo<<endl;
+        pthread_create(&threadarr3[i],NULL, &connect_to_client_for_downloading_file, &args[i]);
+        sleep(2);
+        }   
+       // connect_to_client_for_downloading_file(allips[0]+"|"+file_name+"|"+to_string(size_of_chunk)+"|1", fileoutput);
+
+        
+        
     }
     //send(sock,hello.c_str(),strlen(hello.c_str()),0);
      //char buffer[1024] = {'\0'}; 
@@ -201,18 +218,25 @@ void bind_to_soclet(string trackip , string com_from_client , int trackport, str
     //cout<<buffer<<endl;
    // printf("Hello message sent\n"); 
     
-    return ;
+
 
 
 }
-void connect_to_client_for_downloading_file(string clientinfowithchunk, string filenameoutput)
-{
+
+void *connect_to_client_for_downloading_file(void *arguments)
+{   
+    cout<<"in threaf of connecting client"<<endl;
+    struct thread_arg * clientinfostruct = (thread_arg *)arguments;
+    string clientinfowithchunk = clientinfostruct->clientinfo;
+    cout<<"in threaf of connecting client"<<clientinfowithchunk<<endl;
     vector<string> clientip = string_processing3(clientinfowithchunk);
     string clientipport =  clientip[0];
+    cout<<clientipport<<endl;
     vector<string> ipport = string_processing2(clientipport);
     string clientipuniq = ipport[0];
     int clientportuniq = atoi(ipport[1].c_str());
-
+    string filenameoutput = clientip[4];
+    cout<<filenameoutput<<endl;
 
     //connectingtoclientandgettingdata
     struct sockaddr_in address; 
@@ -231,7 +255,7 @@ void connect_to_client_for_downloading_file(string clientinfowithchunk, string f
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
     { 
         printf("\nConnection Failed \n"); 
-        return ;
+        
     } 
     string full = clientinfowithchunk;
     int datalen = strlen(full.c_str()); // # of bytes in data
@@ -242,16 +266,39 @@ void connect_to_client_for_downloading_file(string clientinfowithchunk, string f
     n = send(sock ,full.c_str() , strlen(full.c_str()) , 0 ); 
     cout<<n<<endl;
 
-    FILE * f;
+    // FILE * f;
+    // f = fopen ( filenameoutput.c_str() , "ab");
+    // char bufferun[512];
+    // int nuq = read(sock, bufferun, 512);
+    // //printf("%*.*s\n", n, n, buffer);
+    // int byteswritten  = fwrite(bufferun,1,512,f);
+    // fclose(f);
+    // close(sock);
+
+    download_file_from_client(filenameoutput,sock);
+
+
+}
+void download_file_from_client(string filenameoutput,int sock)
+{
+    FILE *f;
+    int buflen =  1;
+    int n1 ; 
+    int n2;
     f = fopen ( filenameoutput.c_str() , "ab");
-    char bufferun[512];
-    int nuq = read(sock, bufferun, 512);
-    //printf("%*.*s\n", n, n, buffer);
-    int byteswritten  = fwrite(bufferun,1,512,f);
+     while(buflen)
+    {   
+        n1 = read(sock, (char *)&buflen, sizeof(buflen));
+        buflen = ntohl(buflen);
+        char buffer[buflen];
+        printf("%*.*s\n", n1, n1, buffer);
+        n2 = read(sock,buffer,buflen);
+        int byteswritten  = fwrite(buffer,1,buflen,f);
+        n1 = read(sock, (char *)&buflen, sizeof(buflen));
+        buflen = ntohl(buflen);
+    }
     fclose(f);
     close(sock);
-
-
 }
 // void *task1(void *arguments)
 // {
@@ -328,27 +375,103 @@ void *task1(void *conenctionfd)
 
     vector<string> commandrecievedfromanotherclient = string_processing3(buffer);
     string fname_to_give = commandrecievedfromanotherclient[1];
-    for(int i = 2 ; i<commandrecievedfromanotherclient.size();i++)
-    {
-        int chunk_no = atoi(commandrecievedfromanotherclient[i].c_str());
-        string document;
-        FILE * f;
-        f = fopen ( fname_to_give.c_str() , "rb");
-        unsigned char buffer2[512];
-        while(!feof(f))
-        {   
-        int bytes = fread(buffer2,1,512,f);
-        int bytes2 = send(cfd ,buffer2, 512 , 0 ); 
-        cout<<bytes2<<endl;
-        for(int i = 0; i < bytes; i++){
-        document += buffer2[i];
-        cout << buffer2[i];
-        }
-        }
-        fclose ( f );
+    int chunk_size = atoi(commandrecievedfromanotherclient[2].c_str());
+    int chunk_num = atoi(commandrecievedfromanotherclient[3].c_str());
+    int filesize_from_client = get_file_size(fname_to_give);
+    cout<<chunk_size<<" "<<chunk_num<<" "<<"chunksize and chunk num"<<endl;
+    send_client_the_file(fname_to_give,chunk_size,cfd , chunk_num);
+    // for(int i = 2 ; i<commandrecievedfromanotherclient.size();i++)
+    // {
+    //     int chunk_no = atoi(commandrecievedfromanotherclient[i].c_str());
+    //     string document;
+    //     FILE * f;
+    //     f = fopen ( fname_to_give.c_str() , "rb");
+    //     unsigned char buffer2[512];
+    //     while(!feof(f))
+    //     {   
+    //     int bytes = fread(buffer2,1,512,f);
+    //     int bytes2 = send(cfd ,buffer2, 512 , 0 ); 
+    //     cout<<bytes2<<endl;
+    //     for(int i = 0; i < bytes; i++){
+    //     document += buffer2[i];
+    //     cout << buffer2[i];
+    //     }
+    //     }
+    //     fclose ( f );
 
 
-    }
+    // }
+}
+void send_client_the_file(string filename , int size , int cfd , int chunknum)
+{
+    int datalen;
+    int tmp;
+    int n;
+    FILE * f;
+    f = fopen ( filename.c_str() , "rb");
+    // if(size < 512000)
+    // {
+    datalen = size; // # of bytes in data
+    tmp = htonl(datalen);
+    cout<<tmp;
+    n = write(cfd, (char*)&tmp, sizeof(tmp));
+    char buffer[datalen];
+    fseek(f,(chunknum-1)*size , 0);
+    int bytes = fread(buffer,1,datalen,f);
+    int bytes2 = send(cfd,buffer,datalen,0);
+    datalen = 0;
+    tmp = htonl(datalen);
+    cout<<tmp;
+    n = write(cfd, (char*)&tmp, sizeof(tmp));
+
+    //}
+    
+    
+    // else
+    // {
+    //     int nochunks = size/512000;
+    //     while(nochunks--)
+    //     {
+    //         datalen = 512000; // # of bytes in data
+    //         tmp = htonl(datalen);
+    //         cout<<tmp;
+    //         n = write(cfd, (char*)&tmp, sizeof(tmp));
+    //         char buffer[datalen];
+    //         int bytes = fread(buffer,1,datalen,f);
+    //         int bytes2 = send(cfd,buffer,datalen,0);
+    //         datalen = 512000;
+    //         tmp = htonl(datalen);
+    //         cout<<tmp;
+    //         n = write(cfd, (char*)&tmp, sizeof(tmp));
+
+    //     }
+        // int remaining  = size - 512000*nochunks;
+        // if(remaining = 0)
+        // {
+        //     datalen = 0;
+        //     tmp = htonl(datalen);
+        //     cout<<tmp;
+        //     n = write(cfd, (char*)&tmp, sizeof(tmp));
+
+        // }
+        // else
+        // {
+        //     datalen = remaining; // # of bytes in data
+        //     tmp = htonl(datalen);
+        //     cout<<tmp;
+        //     n = write(cfd, (char*)&tmp, sizeof(tmp));
+        //     char buffer[datalen];
+        //     int bytes = fread(buffer,1,datalen,f);
+        //     int bytes2 = send(cfd,buffer,datalen,0);
+        //     datalen = 0;
+        //     tmp = htonl(datalen);
+        //     cout<<tmp;
+        //     n = write(cfd, (char*)&tmp, sizeof(tmp));
+
+        // }
+    //}
+
+
 }
 vector<string> string_processing(string s)
 {   //cout<<s<<endl;
@@ -401,12 +524,12 @@ vector<string> string_processing2(string s)
     splited_string.push_back(s.substr(b, a - b));
     return splited_string;
 }
-string generating_sha(string file_name, string mtorrentfile, string t1info , string tip2info , float &sizeinkb )
+string generating_sha(string file_name, string mtorrentfile, string t1info , string tip2info , int &sizeinkb )
 {
     FILE *f;
     f = fopen(file_name.c_str(), "rb");
     int siz = get_file_size(file_name);
-    sizeinkb = siz / (1000.0);
+    sizeinkb = siz;
     int no_of_chunks = ceil((float)sizeinkb / 512.0);
     unsigned char buff[512001] = {'\0'};
     unsigned char obuff[20];
@@ -427,6 +550,7 @@ string generating_sha(string file_name, string mtorrentfile, string t1info , str
     fwrite("\n", 1,1,f2);
     fwrite(to_string(sizeinkb).c_str(),to_string(sizeinkb).size(),1,f2);
     fwrite("\n", 1,1,f2);
+    replace(sha.begin(),sha.end(),'\n','x');
     fwrite(sha.c_str(),sha.size(),1,f2);
     fwrite("\n", 1,1,f2);
     fwrite(file_name.c_str(),file_name.size(),1,f2);
