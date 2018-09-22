@@ -188,7 +188,7 @@ void bind_to_soclet(string trackip, string com_from_client, int trackport, strin
 
         vector<string> allips = string_processing3(buffer);
         int no_of_seeders = allips.size();
-        int size_of_chunk = ceil(size / no_of_seeders);
+        int size_of_chunk = ceil((float)size / (float)no_of_seeders);
         // if (noofchunks = 0)
         // {
         //     noofchunks = 1;
@@ -300,7 +300,7 @@ void download_file_from_client(string filenameoutput, int sock)
         buflen = ntohl(buflen);
         cout<<buflen<<"buflen"<<endl;
 
-        char buffer[buflen+1];
+        char buffer[buflen];
 
         n2 = read(sock, buffer, sizeof(buffer));
         int byteswritten = fwrite(buffer, 1, buflen, f);
@@ -424,13 +424,23 @@ void send_client_the_file(string filename, int size, int cfd, int chunknum)
         cout<<"file opened"<<endl;
     }
 
-    datalen = size; // # of bytes in data
+    char buffer[size] = {'\0'};
+    fseek(f, (chunknum - 1) * size, 0);
+    int bytes = fread(buffer, 1, size, f);
+    
+    if(bytes<size)
+    {
+        datalen = bytes;
+    }
+    else
+    {
+        datalen = size;
+    }
+    
     tmp = htonl(datalen);
     cout << tmp<<endl;
     n = write(cfd, (char *)&tmp, sizeof(tmp));
-    char buffer[datalen];
-    fseek(f, (chunknum - 1) * size, 0);
-    int bytes = fread(buffer, 1, datalen, f);
+
     cout<<"bytes read from file "<<bytes<<endl;
     int bytes2 = send(cfd, buffer, datalen, 0);
     cout<<"bytes sent" << bytes2;
