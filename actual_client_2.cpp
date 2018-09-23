@@ -1,3 +1,5 @@
+//ROLL NO :  2018201004
+//NAME : VISHAL BIDAWATKA
 #include <unistd.h>
 #include <iostream>
 #include <stdlib.h>
@@ -30,12 +32,21 @@ void *connect_to_client_for_downloading_file(void *arguments);
 void send_client_the_file(string filename, int size, int cfd, int chunk_num);
 void download_file_from_client(string filenameoutput, int sock);
 void merge_all_file(string sha, string outputfilename,int no_of_seeders);
+
+unordered_map<string,vector<string> > downloaded_list_of_files;
+FILE *pointer_to_log_file;
 struct thread_arg
 {
     string clientinfo;
 };
-int main(int argc, char **argv)
+void printtologfile(string msg,FILE *f = pointer_to_log_file)
 {
+    fprintf(f,msg.c_str());
+    fprintf(f,"\n");
+}
+int main(int argc, char **argv)
+{   
+   
     string clientip;
     int clientport;
     string tracker_ip1;
@@ -43,12 +54,25 @@ int main(int argc, char **argv)
     int portt1;
     int portt2;
     string log_file_name;
-    string client_info = string(argv[1]);
-    string tracker_1_info = string(argv[2]);
-    string tracker_2_info = string(argv[3]);
+    string tracker_1_info;
+    string tracker_2_info;
+    string client_info;
+    try {
+    client_info = string(argv[1]);
+    tracker_1_info = string(argv[2]);
+    tracker_2_info = string(argv[3]);
+    log_file_name = string(argv[4]);
+    
+    }
+    catch(...)
+    {
+        cout<<"ENTER VALID NUMBER OF ARGUMENTS"<<endl;
+        exit(1);
+    }
     get_ip_port(client_info, clientip, clientport);
     get_ip_port(tracker_1_info, tracker_ip1, portt1);
     get_ip_port(tracker_2_info, tracker_ip2, portt2);
+    pointer_to_log_file = fopen(log_file_name.c_str(),"ab");
     int max_client = 32;
     pthread_t threadarr[32];
     int noclient = 0;
@@ -56,7 +80,11 @@ int main(int argc, char **argv)
     pthread_create(&threadarr[0], NULL, clientasserver, &client_info);
 
     while (1)
-    {
+    {   
+        cout.clear();
+        cout<<endl;
+        cout<<"Enter Command:";
+        cout<<endl;
         string s;
         getline(cin, s);
         vector<string> command;
@@ -73,7 +101,58 @@ int main(int argc, char **argv)
             string sha = generating_sha(file_name, torrent_file_name, tracker_1_info, tracker_2_info, size);
 
             bind_to_soclet(tracker_ip1, s, portt1, file_name, clientip, clientport, sha, size, "share");
+            cout<<"SUCCESS:"+torrent_file_name<<endl;
         }
+        if(command[0] == "show" && command[1] == "downloads")
+        {   
+            //cout<<"hello"<<endl;
+            if(downloaded_list_of_files[client_info].size() == 0)
+            {
+                cout<<"No Downloaded files yet"<<endl;
+            }
+            else
+            {
+                for(int i = 0 ; i<downloaded_list_of_files[client_info].size() ; i++)
+                {
+                    cout<<downloaded_list_of_files[client_info][i]<<endl;
+                }
+            cout<<"**Download List END**"<<endl;
+            }
+            
+        }
+
+        if (command[0] == "remove")
+        {
+            string torrent_file_name = command[1];
+            //string file_name_output = command[2];
+            string line;
+            ifstream infile(torrent_file_name);
+            string shaforsearch;
+            string filename;
+            int filesize;
+            int i = 0;
+            while (getline(infile, line))
+            {
+                if (i == 3)
+                {
+                    shaforsearch = line;
+                }
+                if (i == 4)
+                {
+                    filename = line;
+                }
+                if (i == 2)
+                {
+                    filesize = atoi(line.c_str());
+                }
+                i++;
+            }
+            string command = "rm "+torrent_file_name;
+            system(command.c_str());
+            bind_to_soclet(tracker_ip1, s, portt1, filename, clientip, clientport, shaforsearch, filesize, "remove", "nothing");
+            cout<<"SUCCESS:FILE_REMOVED"<<endl;
+        }
+
         if (command[0] == "get")
         {
             string torrent_file_name = command[1];
@@ -101,8 +180,9 @@ int main(int argc, char **argv)
                 i++;
             }
 
-            cout << filename << " " << filesize << " " << shaforsearch << " " << endl;
+            downloaded_list_of_files[client_info].push_back("[D]"+file_name_output);
             bind_to_soclet(tracker_ip1, s, portt1, filename, clientip, clientport, shaforsearch, filesize, "get", file_name_output);
+           
         }
 
         cin.clear();
@@ -126,64 +206,75 @@ void bind_to_soclet(string trackip, string com_from_client, int trackport, strin
     struct sockaddr_in address;
     int sock = 0, valread;
     struct sockaddr_in serv_addr;
-    //string s  = "Hello from client\n\0";
-    string hello = "Hello from client";
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0)
-    {
-        printf("socket failed\n");
+    {   
+        
+        fprintf(pointer_to_log_file,"socket failed\n");
     }
-    cout << trackip << endl;
-    cout << trackport << endl;
+   // cout << trackip << endl;
+   // cout << trackport << endl;
     serv_addr.sin_family = AF_INET;
     inet_pton(AF_INET, trackip.c_str(), &serv_addr.sin_addr);
     serv_addr.sin_port = htons(trackport);
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-        printf("\nConnection Failed \n");
+        fprintf(pointer_to_log_file,"\nConnection Failed \n");
         return;
     }
-    // int datalen = strlen(com_from_client.c_str()); // # of bytes in data
-    // int tmp = htonl(datalen);
-    // cout<<tmp;
-    // int n = write(sock, (char*)&tmp, sizeof(tmp));
-    // cout<<n<<endl;
-    // n = send(sock , com_from_client.c_str() , strlen(com_from_client.c_str()) , 0 );
-    //cout<<n<<endl;
     if (shorget == "share")
     {
         string full = "";
         full = shorget + ";" + file_name + ";" + myip + ";" + to_string(myport) + ";" + shastr + ";" + to_string(size);
-        cout << full << endl;
+        //cout << full << endl;
+        printtologfile(full);
         int datalen = strlen(full.c_str()); // # of bytes in data
         int tmp = htonl(datalen);
-        cout << tmp;
+       // cout << tmp;
         int n = write(sock, (char *)&tmp, sizeof(tmp));
-        cout << n << endl;
+        //cout << n << endl;
         n = send(sock, full.c_str(), strlen(full.c_str()), 0);
-        cout << n << endl;
+        //cout << n << endl;
     }
+
+    if(shorget == "remove")
+    {
+        string full = "";
+        full = shorget + ";" + file_name + ";" + myip + ";" + to_string(myport) + ";" + shastr + ";" + to_string(size);
+        //cout << full << endl;
+        printtologfile(full);
+        int datalen = strlen(full.c_str()); // # of bytes in data
+        int tmp = htonl(datalen);
+        //cout << tmp;
+        int n = write(sock, (char *)&tmp, sizeof(tmp));
+        //cout << n << endl;
+        n = send(sock, full.c_str(), strlen(full.c_str()), 0);
+       // cout << n << endl;
+
+    }
+
+    
     if (shorget == "get")
     {
         string full = "";
         full = shorget + ";" + shastr;
-        cout << full << endl;
+       // cout << full << endl;
         int datalen = strlen(full.c_str()); // # of bytes in data
         int tmp = htonl(datalen);
-        cout << tmp;
+       // cout << tmp;
         int n = write(sock, (char *)&tmp, sizeof(tmp));
-        cout << n << endl;
+       // cout << n << endl;
         n = send(sock, full.c_str(), strlen(full.c_str()), 0);
-        cout << n << endl;
+       // cout << n << endl;
         pthread_t threadarr3[32];
 
         int buflen;
         int n1 = read(sock, (char *)&buflen, sizeof(buflen));
         buflen = ntohl(buflen);
-        cout << buflen << endl;
+       // cout << buflen << endl;
         char buffer[buflen + 1] = {'\0'};
         n1 = read(sock, buffer, buflen);
-        printf("%*.*s\n", n1, n1, buffer);
+        //printf("%*.*s\n", n1, n1, buffer);
         close(sock);
 
         vector<string> allips = string_processing3(buffer);
@@ -193,17 +284,17 @@ void bind_to_soclet(string trackip, string com_from_client, int trackport, strin
         // {
         //     noofchunks = 1;
         // }
-        cout << "number of seeders" << no_of_seeders << endl;
-        cout << "size of each chunk" << size_of_chunk << endl;
+     //   cout << "number of seeders" << no_of_seeders << endl;
+     //   cout << "size of each chunk" << size_of_chunk << endl;
         string each_client_info;
         struct thread_arg args[no_of_seeders];
         for (int i = 0; i < no_of_seeders; i++)
         {
             args[i].clientinfo = allips[i] + "|" + file_name + "|" + to_string(size_of_chunk) + "|" + to_string(i + 1) + "|" + shastr.substr(0,20) + "_" + to_string(i + 1);
             //each_client_info = allips[i]+"|"+file_name+"|"+to_string(size_of_chunk)+"|"+to_string(i+1)+"|"+"vishal"+"_"+to_string(i+1);
-            cout << "each client info" << args[i].clientinfo << endl;
+           // cout << "each client info" << args[i].clientinfo << endl;
             pthread_create(&threadarr3[i], NULL, &connect_to_client_for_downloading_file, &args[i]);
-            sleep(0.5);
+            sleep(0.6);
         }
         // connect_to_client_for_downloading_file(allips[0]+"|"+file_name+"|"+to_string(size_of_chunk)+"|1", fileoutput);
 
@@ -212,6 +303,13 @@ void bind_to_soclet(string trackip, string com_from_client, int trackport, strin
             pthread_join(threadarr3[j], NULL);
         }
        merge_all_file(shastr.substr(0,20), fileoutput ,no_of_seeders);
+       cout<<"SUCCESS:"+fileoutput<<endl;
+        auto i = find(downloaded_list_of_files[myip+":"+to_string(myport)].begin() , downloaded_list_of_files[myip+":"+to_string(myport)].end(),"[D]"+fileoutput);
+        if(i != downloaded_list_of_files[myip+":"+to_string(myport)].end())
+        {
+        *i = "[S]"+fileoutput;
+        }
+       
     }
 }
 void merge_all_file(string sha, string outputfilename,int no_of_seeders)
@@ -235,18 +333,18 @@ void merge_all_file(string sha, string outputfilename,int no_of_seeders)
 
 void *connect_to_client_for_downloading_file(void *arguments)
 {
-    cout << "in threaf of connecting client" << endl;
+   // cout << "in threaf of connecting client" << endl;
     struct thread_arg *clientinfostruct = (thread_arg *)arguments;
     string clientinfowithchunk = clientinfostruct->clientinfo;
-    cout << "in threaf of connecting client" << clientinfowithchunk << endl;
+   // cout << "in threaf of connecting client" << clientinfowithchunk << endl;
     vector<string> clientip = string_processing3(clientinfowithchunk);
     string clientipport = clientip[0];
-    cout << clientipport << endl;
+   // cout << clientipport << endl;
     vector<string> ipport = string_processing2(clientipport);
     string clientipuniq = ipport[0];
     int clientportuniq = atoi(ipport[1].c_str());
     string filenameoutput = clientip[4];
-    cout << filenameoutput << endl;
+   // cout << filenameoutput << endl;
 
     //connectingtoclientandgettingdata
     struct sockaddr_in address;
@@ -269,11 +367,11 @@ void *connect_to_client_for_downloading_file(void *arguments)
     string full = clientinfowithchunk;
     int datalen = strlen(full.c_str()); // # of bytes in data
     int tmp = htonl(datalen);
-    cout << tmp;
+   // cout << tmp;
     int n = write(sock, (char *)&tmp, sizeof(tmp));
-    cout << n << endl;
+  //  cout << n << endl;
     n = send(sock, full.c_str(), strlen(full.c_str()), 0);
-    cout << n << endl;
+  //  cout << n << endl;
 
     // FILE * f;
     // f = fopen ( filenameoutput.c_str() , "ab");
@@ -285,6 +383,11 @@ void *connect_to_client_for_downloading_file(void *arguments)
     // close(sock);
 
     download_file_from_client(filenameoutput, sock);
+    auto i = find(downloaded_list_of_files[clientipport].begin() , downloaded_list_of_files[clientipport].end(),"[D]"+filenameoutput);
+    if(i != downloaded_list_of_files[clientipport].end())
+    {
+        *i = "[S]"+filenameoutput;
+    }
 }
 void download_file_from_client(string filenameoutput, int sock)
 {
@@ -292,13 +395,14 @@ void download_file_from_client(string filenameoutput, int sock)
     int buflen = 1;
     int n1;
     int n2;
-    cout<<"in file download "<<filenameoutput<<endl;
+
+   // cout<<"in file download "<<filenameoutput<<endl;
     f = fopen(filenameoutput.c_str(), "w");
  
-        cout<<"in downloading"<<endl;
+    //    cout<<"in downloading"<<endl;
         n1 = read(sock, (char *)&buflen, sizeof(buflen));
         buflen = ntohl(buflen);
-        cout<<buflen<<"buflen"<<endl;
+     //   cout<<buflen<<"buflen"<<endl;
 
         char buffer[buflen];
 
@@ -315,13 +419,13 @@ void download_file_from_client(string filenameoutput, int sock)
 void *clientasserver(void *arguments)
 {
     string str = *reinterpret_cast<std::string *>(arguments);
-    cout << "IN SERVER" << endl;
-    cout << str << endl;
+  //  cout << "IN SERVER" << endl;
+  //  cout << str << endl;
     vector<string> iport = string_processing2(str);
     string ip = iport[0];
     int port = atoi(iport[1].c_str());
-    cout << ip << endl;
-    cout << port << endl;
+  //  cout << ip << endl;
+  //  cout << port << endl;
     int max_client = 64;
     pthread_t threadarrclient[max_client];
 
@@ -345,7 +449,7 @@ void *clientasserver(void *arguments)
         exit(EXIT_FAILURE);
     }
     listen(listenfd, 64);
-    cout << "client socket opened succesfully" << endl;
+  //  cout << "client socket opened succesfully" << endl;
 
     int noclient = 0;
 
@@ -368,22 +472,22 @@ void *task1(void *conenctionfd)
 {
     int cfd = *(int *)conenctionfd;
 
-    cout << "First client request recieved" << endl;
+  //  cout << "First client request recieved" << endl;
     int buflen;
     int n = read(cfd, (char *)&buflen, sizeof(buflen));
     buflen = ntohl(buflen);
     //cout<<buflen<<endl;
     char buffer[buflen + 1] = {'\0'};
     n = read(cfd, buffer, buflen);
-    printf("%*.*s\n", n, n, buffer);
+   // printf("%*.*s\n", n, n, buffer);
 
     vector<string> commandrecievedfromanotherclient = string_processing3(buffer);
     string fname_to_give = commandrecievedfromanotherclient[1];
     int chunk_size = atoi(commandrecievedfromanotherclient[2].c_str());
     int chunk_num = atoi(commandrecievedfromanotherclient[3].c_str());
     int filesize_from_client = get_file_size(fname_to_give);
-    cout << chunk_size << " " << chunk_num << " "
-         << "chunksize and chunk num" << endl;
+  //  cout << chunk_size << " " << chunk_num << " "
+        // << "chunksize and chunk num" << endl;
     send_client_the_file(fname_to_give, chunk_size, cfd, chunk_num);
     // for(int i = 2 ; i<commandrecievedfromanotherclient.size();i++)
     // {
@@ -415,14 +519,14 @@ void send_client_the_file(string filename, int size, int cfd, int chunknum)
     f = fopen(filename.c_str(), "rb");
     // if(size < 512000)
     // {
-    if(f == NULL)
-    {
-        cout<<"cant open file"<<endl;
-    }
-    else
-    {
-        cout<<"file opened"<<endl;
-    }
+    // if(f == NULL)
+    // {
+    //     cout<<"cant open file"<<endl;
+    // }
+    // else
+    // {
+    //     cout<<"file opened"<<endl;
+    // }
 
     char buffer[size] = {'\0'};
     fseek(f, (chunknum - 1) * size, 0);
@@ -438,12 +542,12 @@ void send_client_the_file(string filename, int size, int cfd, int chunknum)
     }
     
     tmp = htonl(datalen);
-    cout << tmp<<endl;
+    //cout << tmp<<endl;
     n = write(cfd, (char *)&tmp, sizeof(tmp));
 
-    cout<<"bytes read from file "<<bytes<<endl;
+   // cout<<"bytes read from file "<<bytes<<endl;
     int bytes2 = send(cfd, buffer, datalen, 0);
-    cout<<"bytes sent" << bytes2;
+   // cout<<"bytes sent" << bytes2;
     // datalen = 0;
     // tmp = htonl(datalen);
     // cout << tmp<<endl;

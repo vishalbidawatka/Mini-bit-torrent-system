@@ -1,3 +1,6 @@
+//ROLL NO :  2018201004
+//NAME : VISHAL BIDAWATKA
+
 #include <unistd.h>
 #include <iostream>
 #include <stdlib.h>
@@ -177,6 +180,43 @@ void *task1(void *conenctionfd)
         n = send(cfd, full.c_str(), strlen(full.c_str()), 0);
         cout << n << endl;
         // s= s+global_file_manager.global_seeder_list[recieved_from_command[1]].
+    }
+    if (recieved_from_command[0] == "remove")
+    {
+        string has = recieved_from_command[4];
+        cout << has << endl;
+        global_file_manager.filenames[has] = recieved_from_command[1];
+        cout << global_file_manager.filenames[has] << endl;
+        if (global_file_manager.global_seeder_list.find(has) == global_file_manager.global_seeder_list.end())
+        {
+            cout << "File is not yet seeded" << endl;
+           // global_file_manager.global_seeder_list[has] = global_file_manager.global_seeder_list[has] + recieved_from_command[2] + ":" + recieved_from_command[3];
+        }
+        else
+        {
+            string seeders_list = global_file_manager.global_seeder_list[has];
+            cout<<seeders_list<<endl;
+            string str_to_removed = recieved_from_command[2]+":"+recieved_from_command[3];
+            for( int i = seeders_list.find(str_to_removed) ; i != string::npos ; i=seeders_list.find(str_to_removed))
+            {
+                seeders_list.erase(i,str_to_removed.length()+1);
+            }
+            cout<<"Update string"<<endl;
+            cout<<seeders_list<<endl;
+            if(seeders_list[seeders_list.size()-1] == '|')
+            {
+                seeders_list.pop_back();
+            }
+            global_file_manager.global_seeder_list[has] = seeders_list;
+           // int i = seeders_list.find(recieved_from_command[2]+":"+recieved_from_command[3]);
+            
+
+        }
+            //global_file_manager.global_seeder_list[has] = global_file_manager.global_seeder_list[has] + "|" + recieved_from_command[2] + ":" + recieved_from_command[3];
+
+        cout << global_file_manager.global_seeder_list[has] << endl;
+        global_file_manager.sizes[has] = atoi(recieved_from_command[5].c_str());
+        //cout<<global_file_manager.sizes[has]<<endl;
     }
 
     // for ( int i = n ;i<1024 ; i++)
