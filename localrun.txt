@@ -1,0 +1,28 @@
+run server first
+	./tracker 127.0.0.1:5000 127.0.0.1:6000 seederlist serverlog1
+
+run client1
+	./client 127.0.0.1:8800 127.0.0.1:5000 127.0.0.1:6000 clientlog1
+	share vv.mp4 vv.mp4.mtorrent
+	show_downloads
+
+	share vv.mp4 vv.mp4.mtorrent	
+	close
+
+run client2
+	./client 127.0.0.1:7800 127.0.0.1:5000 127.0.0.1:6000 clientlog2
+	get vv.mp4.motorrent vvnew.mp4
+	show_downloads
+
+to show multithreaded functionality : 
+	1.	
+	create client3
+	while there is data transfer(large file) between client1-client2
+	client3 can also make get request to client1 get data;
+
+	2. 
+	while there is data transfer(large file) between client1-client2
+	client1 is acting as seeder(server)
+	at same time you can still run all clientside command create mtorrent file, show_downloads in client1
+	
+	
